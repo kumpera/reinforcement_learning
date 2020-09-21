@@ -188,6 +188,9 @@ namespace reinforcement_learning {
     int request_slates_decision(const char * context_json, unsigned int flags, slates_response& resp, api_status* status = nullptr);
     int request_slates_decision(const char * context_json, slates_response& resp, api_status* status = nullptr);
 
+    RL_DEPRECATED("Temporary API to support testing schema v2")
+    int request_ccb_v2_decision(const char* event_id, const char* context_json, unsigned int flags, slates_response& resp, api_status* status = nullptr);
+
     /**
     * @brief Report that action was taken.
     *
@@ -219,6 +222,12 @@ namespace reinforcement_learning {
      * @return int Return error code.  This will also be returned in the api_status object
      */
     int report_outcome(const char* event_id, float outcome, api_status* status= nullptr);
+
+
+    int report_outcome(const char* event_id, float outcome, int idx, api_status* status= nullptr);
+    int report_outcome(const char* event_id, float outcome, const char *idx, api_status* status= nullptr);
+    int report_outcome(const char* event_id, const char* outcome, int idx, api_status* status= nullptr);
+    int report_outcome(const char* event_id, const char* outcome, const char *idx, api_status* status= nullptr);
 
     /*
      * @brief Refreshes the model if it has background refresh disabled.

@@ -111,6 +111,11 @@ namespace reinforcement_learning
     return request_slates_decision(context_json, action_flags::DEFAULT, resp, status);
   }
 
+  int live_model::request_ccb_v2_decision(const char* event_id, const char* context_json, unsigned int flags, slates_response& resp, api_status* status)
+  {
+    INIT_CHECK();
+    return _pimpl->request_ccb_v2_decision(event_id, context_json, flags, resp, status);
+  }
 
   //not implemented yet
   int live_model::report_action_taken(const char* event_id, api_status* status) {
@@ -128,6 +133,30 @@ namespace reinforcement_learning
   {
     INIT_CHECK();
     return _pimpl->report_outcome(event_id, outcome, status);
+  }
+
+  int live_model::report_outcome(const char* event_id, const char* outcome, int idx, api_status* status)
+  {
+    INIT_CHECK();
+    return _pimpl->report_outcome(event_id, outcome, idx, status);
+  }
+
+  int live_model::report_outcome(const char* event_id, float outcome, int idx, api_status* status)
+  {
+    INIT_CHECK();
+    return _pimpl->report_outcome(event_id, outcome, idx, status);
+  }
+
+  int live_model::report_outcome(const char* event_id, const char* outcome, const char* idx, api_status* status)
+  {
+    INIT_CHECK();
+    return _pimpl->report_outcome(event_id, outcome, idx, status);
+  }
+
+  int live_model::report_outcome(const char* event_id, float outcome, const char* idx, api_status* status)
+  {
+    INIT_CHECK();
+    return _pimpl->report_outcome(event_id, outcome, idx, status);
   }
 
   int live_model::refresh_model(api_status* status)
