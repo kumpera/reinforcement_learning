@@ -40,4 +40,5 @@ ERROR_CODE_DEFINITION(38, protocol_not_supported, "Protocol version is not suppo
 ERROR_CODE_DEFINITION(39, external_error, "Opaque error in external code. ")
 ERROR_CODE_DEFINITION(40, unsupported_learning_mode, "Unsupported learning mode")
 ERROR_CODE_DEFINITION(41, http_client_init_error, "Cannot initialize http client")
+ERROR_CODE_DEFINITION(42, unsuported_legacy_feature, "Feature not supoprted in legacy mode.")
 //! [Error Definitions]

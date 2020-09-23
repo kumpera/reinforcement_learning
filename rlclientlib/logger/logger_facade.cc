@@ -100,11 +100,31 @@ namespace reinforcement_learning {
       }
     }
 
-    int slates_logger_facade::log_decision(const std::string& event_id, const char* context, unsigned int flags, const std::vector<std::vector<uint32_t>>& action_ids,
+    int model_type_to_payload_type(model_management::model_type_t type, generic_event::payload_type_t &ret, api_status *status)
+    {
+      // FIXME there's no unknown/invalid payload type and out vars must always be inited
+      ret = generic_event::payload_type_t::PayloadType_CCB;
+      switch(type) {
+        case model_management::model_type_t::CCB: ret = generic_event::payload_type_t::PayloadType_CCB; break;
+        case model_management::model_type_t::SLATES: ret = generic_event::payload_type_t::PayloadType_Slates; break;
+        default:
+          RETURN_ERROR_ARG(nullptr, status, invalid_argument, "Only CCB and Slates are supported by the multi_slot logger.");
+      }
+      return error_code::success;
+    }
+
+    int slates_logger_facade::log_decision(model_management::model_type_t type, const char* event_id, const char* context, unsigned int flags, const std::vector<std::vector<uint32_t>>& action_ids,
       const std::vector<std::vector<float>>& pdfs, const std::string& model_version, api_status* status) {
       switch (_version) {
-        case 1: return _v1->log_decision(event_id, context, flags, action_ids, pdfs, model_version, status);
-        case 2: return _v2->log(event_id.c_str(), _serializer.event(context, flags, action_ids, pdfs, model_version), _serializer.type, status);
+        case 1:
+          if(type != model_management::model_type_t::SLATES)
+            RETURN_ERROR_ARG(nullptr, status, unsuported_legacy_feature, "Only slates events can be logged with protocol v1.");
+          return _v1->log_decision(event_id, context, flags, action_ids, pdfs, model_version, status);
+        case 2: {
+          generic_event::payload_type_t payload_type;
+          RETURN_IF_FAIL(model_type_to_payload_type(type, payload_type, status));
+          return _v2->log(event_id, _serializer.event(context, flags, action_ids, pdfs, model_version), payload_type, status);
+        }
         default: return protocol_not_supported(status);
       }
     }

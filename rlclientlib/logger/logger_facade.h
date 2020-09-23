@@ -12,6 +12,7 @@
 #include "time_helper.h"
 
 #include "event_logger.h"
+#include "model_mgmt.h"
 
 #include "serialization/payload_serializer.h"
 
@@ -79,7 +80,7 @@ namespace reinforcement_learning
 
       int init(api_status* status);
 
-      int log_decision(const std::string& event_id, const char* context, unsigned int flags, const std::vector<std::vector<uint32_t>>& action_ids,
+      int log_decision(model_management::model_type_t type, const char* event_id, const char* context, unsigned int flags, const std::vector<std::vector<uint32_t>>& action_ids,
         const std::vector<std::vector<float>>& pdfs, const std::string& model_version, api_status* status);
 
     private:
