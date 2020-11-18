@@ -1,6 +1,6 @@
 #! /usr/bin/env python3 -W ignore::DeprecationWarning
 import flatbuffers
-import zstd
+import zstandard as zstd
 import sys
 import json
 
