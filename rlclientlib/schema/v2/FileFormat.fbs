@@ -1,0 +1,28 @@
+// EventHubInteraction Schema used by FlatBuffer
+include "Event.fbs";
+
+namespace reinforcement_learning.messages.flatbuff.v2;
+
+enum BatchType : ubyte { Interactions, Observations }
+
+table SerializedBatch {
+    type: BatchType;
+    payload: [ubyte];
+}
+
+table JoinedPayload {
+    batches: [SerializedBatch];
+}
+
+table KeyValue {
+    key: string;
+    value: string;
+}
+
+table FileHeader {
+    join_time: TimeStamp;
+    properties: [KeyValue];
+}
+
+root_type EventBatch;
+root_type FileHeader;
