@@ -121,6 +121,10 @@ for batch in observations_file.messages():
             observations[evt_id] = []
         observations[evt_id].append(evt)
 
-
+for batch in interactions_file.messages():
+    for i in range(0, batch.EventsLength()):
+        evt = batch.Events(i)
+        evt_id = evt.Meta().Id()
+        print(f'evt {evt_id} has_reward:{evt_id in observations}')
 
 # join_streams(interactions_file observations_file, result_file)
