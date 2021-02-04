@@ -12,10 +12,16 @@ table BatchMetadata {
     content_encoding: string;
 }
 
+table SerializedEvent {
+    payload:[ubyte]; //serialized Event
+}
+
 // Collection of Ranking events
 table EventBatch {
-    events:[Event];
+    events:[SerializedEvent];
     metadata: BatchMetadata;
 }
 
 root_type EventBatch;
+
+
