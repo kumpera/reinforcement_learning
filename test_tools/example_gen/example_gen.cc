@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 #include <fstream>
 #include <cstring>
 #include <boost/program_options.hpp>
@@ -18,6 +19,8 @@ namespace po = boost::program_options;
 
 //global var, yeah ugg
 bool enable_dedup = false;
+bool enable_compression = false;
+bool enable_turbo = false;
 
 static const char *options[] = {
   "cb",
@@ -54,6 +57,13 @@ enum options{
 void load_config_from_json(int action, u::configuration& config)
 {
   std::string file_name(options[action]);
+  if(enable_dedup)
+    file_name += "_dedup";
+  if(enable_compression)
+    file_name += "_compression";
+  if(enable_turbo)
+    file_name += "_turbo";
+
   file_name += "_v2.fb";
 
   config.set("ApplicationID", "<appid>");
@@ -73,10 +83,10 @@ void load_config_from_json(int action, u::configuration& config)
   config.set("protocol.version", "2");
   config.set("InitialExplorationEpsilon", "1.0");
 
-  if(enable_dedup) {
+  if(enable_dedup)
     config.set(nm::INTERACTION_USE_DEDUP, "true");
+  if(enable_compression)
     config.set(nm::INTERACTION_USE_COMPRESSION, "true");
-  }
 
   if(action == CCB_ACTION || action == CCB_BASELINE_ACTION) {
     config.set(r::name::MODEL_VW_INITIAL_COMMAND_LINE, "--ccb_explore_adf --json --quiet --epsilon 0.0 --first_only --id N/A");
@@ -97,6 +107,102 @@ const auto JSON_SLATES_CONTEXT = R"({"GUser":{"id":"a","major":"eng","hobby":"hi
 
 const auto JSON_CA_CONTEXT = R"({"RobotJoint1":{"friction":78}})";
 
+// We use this instead of rand to ensure it's xplat
+int pseudo_random(int seed) {
+  constexpr uint64_t CONSTANT_A = 0xeece66d5deece66dULL;
+  constexpr uint64_t CONSTANT_C = 2147483647;
+
+  uint64_t val = CONSTANT_A * seed + CONSTANT_C;
+  return (int)(val & 0xFFFFFFFF);
+}
+
+class prng {
+  int val;
+public:
+  prng(int initial_seed) : val(pseudo_random(initial_seed)) {}
+  uint32_t next_uint() {
+    uint32_t res = val & 0x7FFFFFFF;
+    val = pseudo_random(val);
+    return res;
+  }
+};
+
+class cb_decision_gen {
+  int shared_features, action_features, actions_per_decision;
+  std::vector<std::string> actions_set;
+  prng rand;
+  std::string temp_str;
+
+  std::string mk_feature_vector(int count, uint32_t max_idx)
+  {
+      std::stringstream str;
+      str << "{ ";
+      std::set<uint32_t> added_idx;
+      int added = 0;
+      while(added < count) {
+        auto idx = rand.next_uint() % max_idx;
+        if(added_idx.find(idx) == added_idx.end()) {
+          if (added > 0)
+            str << ",";
+          str << "\"_" << idx << "_f\": 1";
+
+          ++added;
+          added_idx.insert(idx);
+        }
+      }
+      str << "}";
+      return str.str();
+  }
+
+public:
+  cb_decision_gen(int shared_features, int action_features, int actions_per_decision, int total_actions, int initial_seed) :
+    shared_features(shared_features), action_features(action_features), actions_per_decision(actions_per_decision), rand(initial_seed) {
+    for(int i = 0; i < total_actions; ++i) {
+      actions_set.push_back(mk_feature_vector(action_features, action_features * 3));   
+    }
+  }
+
+  const char* gen_example() {
+    std::stringstream str;
+    str << R"({"shared":)";
+    str << mk_feature_vector(shared_features, shared_features * 3) << ",";
+    str << R"("_multi":[)";
+    std::set<size_t> added_actions;
+    int added = 0;
+    while(added < actions_per_decision) {
+      auto idx = rand.next_uint() % actions_set.size();
+      if(added_actions.find(idx) == added_actions.end()) {
+        if(added > 0)
+          str << ",";
+        added_actions.insert(idx);
+
+        str << R"({"action":)";
+        str << actions_set[idx];
+        str << "}";
+        ++added;
+      }
+    }
+
+    str << R"(]})";
+    temp_str = str.str();
+
+    // printf("----\n");
+    // printf("%s\n", temp_str.c_str());
+    // printf("----\n");
+    // printf("%s\n", JSON_CB_CONTEXT);
+    return temp_str.c_str();
+  }
+};
+
+//this is super fugly due to the C'ness of this code.
+cb_decision_gen *cb_gen;
+
+const char* get_cb_example(void) {
+  if(cb_gen)
+    return cb_gen->gen_example();
+  return JSON_CB_CONTEXT;
+}
+
 
 int take_action(r::live_model& rl, const char *event_id, int action) {
   r::api_status status;
@@ -104,7 +210,7 @@ int take_action(r::live_model& rl, const char *event_id, int action) {
   switch(action) {
     case CB_ACTION: {// "cb",
       r::ranking_response response;
-      if(rl.choose_rank(event_id, JSON_CB_CONTEXT, response, &status))
+      if(rl.choose_rank(event_id, get_cb_example(), response, &status))
           std::cout << status.get_error_msg() << std::endl;
       break;
     }
@@ -170,17 +276,13 @@ int take_action(r::live_model& rl, const char *event_id, int action) {
   return 0;
 }
 
-// We use this instead of rand to ensure it's xplat
-int pseudo_random(int seed) {
-  constexpr uint64_t CONSTANT_A = 0xeece66d5deece66dULL;
-  constexpr uint64_t CONSTANT_C = 2147483647;
-
-  uint64_t val = CONSTANT_A * seed + CONSTANT_C;
-  return (int)(val & 0xFFFFFFFF);
-}
-
 int run_config(int action, int count, int initial_seed) {
   u::configuration config;
+  if(enable_turbo) //tune this to change the distribution
+    cb_gen = new cb_decision_gen(20, 400, 10, 50, initial_seed);
+    // cb_gen = new cb_decision_gen(5, 10, 2, 6, initial_seed);
+
+  int res = 0;
 
   load_config_from_json(action, config);
 
@@ -198,12 +300,16 @@ int run_config(int action, int count, int initial_seed) {
     else
       sprintf(event_id, "%x", pseudo_random(initial_seed + i * 997739));
 
-    int r = take_action(rl, event_id, action);
-    if(r)
-      return r;
+    res = take_action(rl, event_id, action);
+    if(res)
+      break;
   }
 
-  return 0;
+  if(cb_gen) {
+    delete cb_gen;
+    cb_gen = nullptr;
+  }
+  return res;
 }
 
 int main(int argc, char *argv[]) {
@@ -216,7 +322,9 @@ int main(int argc, char *argv[]) {
   desc.add_options()
     ("help", "Produce help message")
     ("all", "use all args")
-    ("dedup", "Enable dedup/zstd")
+    ("dedup", "Enable dedup")
+    ("compression", "Enable zstd compression")
+    ("turbo", "Generate examples that are dedup friendly (1k features per action, 50 shared features, 200 unique actions) - CB ONLY")
     ("count", po::value<int>(), "Number of events to produce")
     ("seed", po::value<int>(), "Initial seed used to produce event ids")
     ("kind", po::value<std::string>(), "which kind of example to generate (cb,ccb,ccb-baseline,slates,ca,(f|s)(s|i)?-reward,action-taken)");
@@ -230,6 +338,8 @@ int main(int argc, char *argv[]) {
     po::notify(vm);
     gen_all = vm.count("all");
     enable_dedup = vm.count("dedup");
+    enable_compression = vm.count("compression");
+    enable_turbo = vm.count("turbo");
     if(vm.count("kind") > 0)
       action_name = vm["kind"].as<std::string>();
     if(vm.count("count") > 0)
