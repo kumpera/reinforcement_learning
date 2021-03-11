@@ -61,7 +61,10 @@ def cast(table, tmp_type):
 def parse_cb(payload):
     evt = CbEvent.GetRootAsCbEvent(payload, 0)
     print(f'\tcb: actions:{evt.ActionIdsLength()} model:{evt.ModelId()} lm:{learning_mode_name(evt.LearningMode())} deferred:{evt.DeferredAction()}')
-    print(f'\t\tcontext: {fmt_payload(evt.ContextAsNumpy())}')
+    if evt.ContextLength() > 100:
+        print(f'\t\tcontext: {evt.ContextLength()} bytes')
+    else:
+        print(f'\t\tcontext: {fmt_payload(evt.ContextAsNumpy())}')
 
 def parse_outcome(payload):
     evt = OutcomeEvent.GetRootAsOutcomeEvent(payload, 0)
@@ -98,7 +101,10 @@ def parse_dedup_info(payload):
     evt = DedupInfo.GetRootAsDedupInfo(payload, 0)
     print(f'\tdedup-info ids:{evt.IdsLength()} values:{evt.ValuesLength()}')
     for i in range(0, evt.ValuesLength()):
-        print(f'\t\t[{evt.Ids(i)}]: "{evt.Values(i).decode("utf-8")}"')
+        if len(evt.Values(i)) > 100:
+            print(f'\t\t[{evt.Ids(i)}]: {len(evt.Values(i))} bytes')
+        else:
+            print(f'\t\t[{evt.Ids(i)}]: "{evt.Values(i).decode("utf-8")}"')
 
 def dump_event(event_payload, idx, timestamp=None):
     evt = Event.GetRootAsEvent(event_payload, 0)
@@ -136,9 +142,12 @@ def dump_event_batch(buf):
 
 
 def dump_preamble_file(file_name, buf):
-    preamble = parse_preamble(buf)
-    print(f'parsing preamble file {file_name}\n\tpreamble:{preamble}')
-    dump_event_batch(buf[PREAMBLE_LENGTH : PREAMBLE_LENGTH + preamble["msg_size"]])
+    while(len(buf) >= 8):
+        preamble = parse_preamble(buf)
+        print(f'parsing preamble file {file_name}\n\tpreamble:{preamble}')
+        msg_len = PREAMBLE_LENGTH + preamble["msg_size"]
+        dump_event_batch(buf[PREAMBLE_LENGTH : msg_len])
+        buf = buf[PREAMBLE_LENGTH + preamble["msg_size"] : ]
 
 MSG_TYPE_HEADER = 0x55555555
 MSG_TYPE_REGULAR = 0xFFFFFFFF
